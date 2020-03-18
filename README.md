@@ -14,7 +14,7 @@ request >= 2.21.0
 Installation
 ------------
 
-From pypi
+From pypi (Not just yet)
 
 ```bash
 pip install naapi
