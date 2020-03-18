@@ -4,3 +4,5 @@ naapi.code-workspace
 naapi.egg-info
 .notes.txt
 .vscode
+build/
+dist/
