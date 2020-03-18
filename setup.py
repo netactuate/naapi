@@ -3,9 +3,9 @@ from setuptools import setup
 
 setup(
     name='naapi',
-    version='0.1.1',
+    version='0.1.2',
     packages=['naapi'],
-    url='https://github.com/tahoe/flickr_archiver/',
+    url='https://github.com/netactuate/naapi/',
     license='MIT',
     description='NetActuate API SDK, With both normal and asyncio packages',
     keywords='api sdk cloud python netactuate',
