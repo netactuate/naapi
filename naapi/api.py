@@ -2,6 +2,7 @@
 
 Author: Dennis Durling<djdtahoe@gmail.com>
 """
+import json
 import requests as rq
 
 API_HOSTS = {
@@ -71,8 +72,27 @@ class NetActuateNodeDriver():
         self.connection = connection(self.key, api_version=api_version)
 
     def locations(self):
-        """Todo"""
-        return self.connection('/cloud/locations/')
+        """Rewriting the dictionary into a list
+        Also adding a key to each location named 'country'
+        based off the name value
+        """
+        locs_resp = self.connection('/cloud/locations/')
+        locations = []
+        locs_dict = locs_resp.json()
+        for loc_key in locs_dict:
+            # just add the country from part of the name afer comma
+            locs_dict[loc_key]['country'] = (
+                locs_dict[loc_key]['name']
+                .split(',')[1].replace(" ", "")
+            )
+            # put in list
+            locations.append(locs_dict[loc_key])
+
+        # update the response object so we can return it as a list
+        # like other response objects. TODO: Update api to return a list
+        # pylint: disable=protected-access
+        locs_resp._content = json.dumps(locations).encode()
+        return locs_resp
 
     def os_list(self):
         """Todo"""
@@ -185,11 +205,26 @@ class NetActuateNodeDriver():
         """Todo"""
         return self.connection('/cloud/buy/' + plan)
 
-    def buy_build(self, plan, site, image, fqdn, passwd, mbpkgid):
+    def buy_build(self, params=None):
         """Todo"""
-        params = {'fqdn': fqdn, 'mbpkgid': mbpkgid,
-                  'image': image, 'location': site,
-                  'password': passwd, 'plan': plan}
         return self.connection(
-            '/cloud/buy_build/', data=params, method='POST')
+            '/cloud/buy_build/', data=params, method='POST'
+        )
 
+    def get_job(self, mbpkgid, job_id):
+        """Gets all server jobs for this mbpkgid with the provided jobid
+
+        TODO:   update get_job and get_jobs to be more explicit
+                This will require an api change
+        """
+        params = {'job_id': job_id, 'mbpkgid': mbpkgid}
+        return self.connection('/cloud/serverjob/', data=params)
+
+    def get_jobs(self, mbpkgid):
+        """Gets all server jobs for this mbpkgid
+
+        TODO:   update get_job and get_jobs to be more explicit
+                This will require an api change
+        """
+        params = {'mbpkgid': mbpkgid}
+        return self.connection('/cloud/serverjobs/', data=params)
