@@ -3,6 +3,7 @@
 import os
 import sys
 import asyncio
+import json
 from naapi.aioapi import (
     NetActuateNodeDriver,
 )
@@ -16,7 +17,11 @@ if API_KEY is None:
 async def main():
     """Basic Main"""
     conn = NetActuateNodeDriver(API_KEY)
-    servers = await conn.servers()
-    print(servers)
+    servers = json.loads(await conn.servers())
+    print("server 0: ", servers[0])
+    locations = json.loads(await conn.locations())
+    print("location 0: ", locations[0])
+    bw_report = json.loads(await conn.bandwidth_report(mbpkgid=servers[0]['mbpkgid']))
+    print("bw_report: ", bw_report)
 
 asyncio.run(main())
