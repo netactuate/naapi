@@ -21,15 +21,18 @@ class NetActuateException(Exception):
         return self.__repr__()
 
     def __repr__(self):
-        return "<NetActuateException in %d : %s>" % (self.code, self.message)
+        return (
+            "<NetActuateException in {0} : {1}>"
+            .format(self.code, self.message)
+        )
 
 def connection(key, api_version):
     """TODO"""
     __key__ = key
     if api_version in API_HOSTS.keys():
-        root_url = 'http://{}'.format(API_HOSTS[api_version])
+        root_url = 'http://{0}'.format(API_HOSTS[api_version])
     else:
-        root_url = 'http://{}'.format(API_HOSTS['v1'])
+        root_url = 'http://{0}'.format(API_HOSTS['v1'])
 
     def request(url, data=None, method=None):
         if method is None:
@@ -37,15 +40,15 @@ def connection(key, api_version):
         if data is None:
             data = {}
         if not url.startswith('/'):
-            url = '/{}'.format(url)
+            url = '/{0}'.format(url)
 
         # build full url
-        url_root = '{}{}?key={}'.format(root_url, url, __key__)
+        url_root = '{0}{1}?key={2}'.format(root_url, url, __key__)
 
         try:
             if method == 'GET':
                 for key, value in data.items():
-                    url_root = "{}&{}={}".format(url_root, key, value)
+                    url_root = "{0}&{1}={2}".format(url_root, key, value)
                 response = rq.get(url_root)
             elif method == 'POST':
                 response = rq.post(url_root, json=data)
@@ -110,13 +113,11 @@ class NetActuateNodeDriver():
             return self.connection('/cloud/server/' + str(mbpkgid))
         return self.connection('/cloud/servers/')
 
-    def packages(self):
+    def packages(self, mbpkgid=False):
         """Todo"""
+        if mbpkgid:
+            return self.connection('/cloud/package/' + str(mbpkgid))
         return self.connection('/cloud/packages')
-
-    def package(self, mbpkgid):
-        """Todo"""
-        return self.connection('/cloud/package/' + str(mbpkgid))
 
     def ipv4(self, mbpkgid):
         """Todo"""
@@ -137,7 +138,7 @@ class NetActuateNodeDriver():
     def start(self, mbpkgid):
         """Todo"""
         return self.connection(
-            '/cloud/server/start/{}'.format(mbpkgid), method='POST')
+            '/cloud/server/start/{0}'.format(mbpkgid), method='POST')
 
     def shutdown(self, mbpkgid, force=False):
         """Todo"""
@@ -145,7 +146,7 @@ class NetActuateNodeDriver():
         if force:
             params['force'] = 1
         return self.connection(
-            '/cloud/server/shutdown/{}'.format(mbpkgid), data=params, method='POST')
+            '/cloud/server/shutdown/{0}'.format(mbpkgid), data=params, method='POST')
 
     def reboot(self, mbpkgid, force=False):
         """Todo"""
@@ -153,20 +154,20 @@ class NetActuateNodeDriver():
         if force:
             params['force'] = 1
         return self.connection(
-            '/cloud/server/reboot/{}'.format(mbpkgid), data=params,
+            '/cloud/server/reboot/{0}'.format(mbpkgid), data=params,
             method='POST')
 
     def rescue(self, mbpkgid, password):
         """Todo"""
         params = {'rescue_pass': str(password)}
         return self.connection(
-            '/cloud/server/start_rescue/{}'.format(mbpkgid), data=params,
+            '/cloud/server/start_rescue/{0}'.format(mbpkgid), data=params,
             method='POST')
 
     def rescue_stop(self, mbpkgid):
         """Todo"""
         return self.connection(
-            '/cloud/server/stop_rescue/{}'.format(mbpkgid), method='POST')
+            '/cloud/server/stop_rescue/{0}'.format(mbpkgid), method='POST')
 
     # pylint: disable=too-many-arguments
     def build(self, site, image, fqdn, passwd, mbpkgid):
@@ -178,15 +179,26 @@ class NetActuateNodeDriver():
         return self.connection(
             '/cloud/server/build/', data=params, method='POST')
 
-    def delete(self, mbpkgid):
-        """Todo"""
+    def delete(self, mbpkgid, extra_params=None):
+        """Delete the vm
+        If extra_params which defaults to cancel_billing=False
+        add mbpkgid to extra_params and pass params, otherwise
+        pass just the url with the mbpkgid
+        Ansible role 'node.py' passes cancel_billing by default
+        """
+        if extra_params is not None:
+            extra_params['mbpkgid'] = mbpkgid
+            return self.connection(
+                '/cloud/server/delete', data=extra_params, method='POST'
+            )
         return self.connection(
-            '/cloud/server/delete/{}'.format(mbpkgid), method='POST')
+            '/cloud/server/delete/{0}'.format(mbpkgid), method='POST'
+        )
 
     def unlink(self, mbpkgid):
         """Todo"""
         return self.connection(
-            '/cloud/unlink/{}'.format(mbpkgid), method='POST')
+            '/cloud/unlink/{0}'.format(mbpkgid), method='POST')
 
     def status(self, mbpkgid):
         """Todo"""
@@ -199,13 +211,14 @@ class NetActuateNodeDriver():
     def cancel(self, mbpkgid):
         """Todo"""
         return self.connection(
-            '/cloud/cancel/{}'.format(mbpkgid), method='POST')
+            '/cloud/cancel/{0}'.format(mbpkgid), method='POST'
+        )
 
     def buy(self, plan):
         """Todo"""
         return self.connection('/cloud/buy/' + plan)
 
-    def buy_build(self, params=None):
+    def buy_build(self, params):
         """Todo"""
         return self.connection(
             '/cloud/buy_build/', data=params, method='POST'

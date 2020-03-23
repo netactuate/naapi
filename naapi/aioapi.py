@@ -45,6 +45,7 @@ class NetActuateException(Exception):
         return "<NetActuateException in %d : %s>" % (self.code, self.message)
 
 
+# pylint: disable=useless-object-inheritance, too-few-public-methods
 class HVFromDict(object):
     """Takes any dict and creates an object out of it
     May behave weirdly if you do multiple level dicts
@@ -68,42 +69,8 @@ class HVJobStatus:
         self.node_id = node_id
         self._job = None
 
-    async def status(self):
-        if self._job is None:
-            await self.refresh()
-        return int(self._job['status'])
-
-    async def job_id(self):
-        if self._job is None:
-            await self.refresh()
-        return int(self._job.get('id', '0'))
-
-    async def command(self):
-        if self._job is None:
-            await self.refresh()
-        return self._job.get('command', '')
-
-    async def inserted(self):
-        if self._job is None:
-            await self.refresh()
-        return self._job.get('ts_insert', '0')
-
-    async def is_success(self):
-        if self._job is None:
-            await self.refresh()
-        return int(await self.status()) == 5
-
-    async def is_working(self):
-        if self._job is None:
-            await self.refresh()
-        return int(await self.status()) <= 3
-
-    async def is_failure(self):
-        if self._job is None:
-            await self.refresh()
-        return int(await self.status()) == 6
-
     async def _get_job_status(self):
+        """TODO"""
         params = {'mbpkgid': self.node_id,
                   'job_id': self.job_result['id']}
         result = await self.conn.connection(
@@ -111,7 +78,50 @@ class HVJobStatus:
             data=params)
         return json.loads(result) # json.loads(result)
 
+    async def status(self):
+        """TODO"""
+        if self._job is None:
+            await self.refresh()
+        return int(self._job['status'])
+
+    async def job_id(self):
+        """TODO"""
+        if self._job is None:
+            await self.refresh()
+        return int(self._job.get('id', '0'))
+
+    async def command(self):
+        """TODO"""
+        if self._job is None:
+            await self.refresh()
+        return self._job.get('command', '')
+
+    async def inserted(self):
+        """TODO"""
+        if self._job is None:
+            await self.refresh()
+        return self._job.get('ts_insert', '0')
+
+    async def is_success(self):
+        """TODO"""
+        if self._job is None:
+            await self.refresh()
+        return int(await self.status()) == 5
+
+    async def is_working(self):
+        """TODO"""
+        if self._job is None:
+            await self.refresh()
+        return int(await self.status()) <= 3
+
+    async def is_failure(self):
+        """TODO"""
+        if self._job is None:
+            await self.refresh()
+        return int(await self.status()) == 6
+
     async def refresh(self):
+        """TODO"""
         self._job = await self._get_job_status()
         return self
 
@@ -167,9 +177,28 @@ class NetActuateNodeDriver():
             self.key,
             api_version=api_version)
 
+
     async def locations(self):
-        """TODO"""
-        return await self.connection('/cloud/locations/')
+        """Rewriting the dictionary into a list
+        Also adding a key to each location named 'country'
+        based off the name value
+        """
+        locs_resp = await self.connection('/cloud/locations/')
+        locations = []
+        locs_dict = json.loads(locs_resp)
+        for loc_key in locs_dict:
+            # just add the country from part of the name afer comma
+            locs_dict[loc_key]['country'] = (
+                locs_dict[loc_key]['name']
+                .split(',')[1].replace(" ", "")
+            )
+            # put in list
+            locations.append(locs_dict[loc_key])
+
+        # update the response object so we can return it as a list
+        # like other response objects. TODO: Update api to return a list
+        # pylint: disable=protected-access
+        return json.dumps(locations)
 
     async def os_list(self):
         """TODO"""
@@ -179,24 +208,19 @@ class NetActuateNodeDriver():
         """TODO"""
         if location:
             return await self.connection('/cloud/sizes/' + str(location))
-        else:
-            return await self.connection('/cloud/sizes/')
+        return await self.connection('/cloud/sizes/')
 
     async def servers(self, mbpkgid=False):
         """TODO"""
         if mbpkgid:
-            result = await self.connection('/cloud/server/' + str(mbpkgid))
-        else:
-            result = await self.connection('/cloud/servers/')
-        return result
+            return await self.connection('/cloud/server/' + str(mbpkgid))
+        return await self.connection('/cloud/servers/')
 
-    async def packages(self):
+    async def packages(self, mbpkgid=False):
         """TODO"""
+        if mbpkgid:
+            return await self.connection('/cloud/package/' + str(mbpkgid))
         return await self.connection('/cloud/packages')
-
-    async def package(self, mbpkgid):
-        """TODO"""
-        return await self.connection('/cloud/package/' + str(mbpkgid))
 
     async def ipv4(self, mbpkgid):
         """TODO"""
@@ -248,19 +272,26 @@ class NetActuateNodeDriver():
         return await self.connection(
             '/cloud/server/stop_rescue/{0}'.format(mbpkgid), method='POST')
 
-    async def build(self, dc, image, fqdn, passwd, mbpkgid):
+    # pylint: disable=too-many-arguments
+    async def build(self, site, image, fqdn, passwd, mbpkgid):
         """TODO"""
         params = {'fqdn': fqdn, 'mbpkgid': mbpkgid,
-                  'image': image, 'location': dc,
+                  'image': image, 'location': site,
                   'password': passwd}
 
         return await self.connection(
             '/cloud/server/build/', data=params, method='POST')
 
-    async def delete(self, mbpkgid):
+    async def delete(self, mbpkgid, extra_params=None):
         """TODO"""
+        if extra_params is not None:
+            extra_params['mbpkgid'] = mbpkgid
+            return await self.connection(
+                '/cloud/server/delete', data=extra_params, method='POST'
+            )
         return await self.connection(
-            '/cloud/server/delete/{0}'.format(mbpkgid), method='POST')
+            '/cloud/server/delete/{0}'.format(mbpkgid), method='POST'
+        )
 
     async def unlink(self, mbpkgid):
         """TODO"""
@@ -271,10 +302,6 @@ class NetActuateNodeDriver():
         """TODO"""
         return await self.connection('/cloud/status/{0}'.format(mbpkgid))
 
-    # root password call is not enabled for api key use yet,
-    # however you can auth with the account password to verify & submit
-    # params['email']= 'abc@cde.com'
-    # params['password']= 'abc!@#'
     async def bandwidth_report(self, mbpkgid):
         """TODO"""
         return await self.connection('/cloud/servermonthlybw/' + str(mbpkgid))
@@ -288,17 +315,25 @@ class NetActuateNodeDriver():
         """TODO"""
         return await self.connection('/cloud/buy/' + plan)
 
-    async def buy_build(self, plan, site, image, fqdn, passwd, mbpkgid):
+    async def buy_build(self, params):
         """TODO"""
-        params = {'fqdn': fqdn, 'mbpkgid': mbpkgid,
-                  'image': image, 'location': site,
-                  'password': passwd, 'plan': plan}
-
         return await self.connection(
             '/cloud/buy_build/', data=params, method='POST')
 
-    async def root_password(self, mbpkgid, passwd):
-        """TODO"""
-        params = {'rootpass': passwd}
-        return await self.connection(
-            '/cloud/server/password/' + mbpkgid, data=params, method='POST')
+    async def get_job(self, mbpkgid, job_id):
+        """Gets all server jobs for this mbpkgid with the provided jobid
+
+        TODO:   update get_job and get_jobs to be more explicit
+                This will require an api change
+        """
+        params = {'job_id': job_id, 'mbpkgid': mbpkgid}
+        return await self.connection('/cloud/serverjob/', data=params)
+
+    async def get_jobs(self, mbpkgid):
+        """Gets all server jobs for this mbpkgid
+
+        TODO:   update get_job and get_jobs to be more explicit
+                This will require an api change
+        """
+        params = {'mbpkgid': mbpkgid}
+        return await self.connection('/cloud/serverjobs/', data=params)
