@@ -189,7 +189,7 @@ class NetActuateNodeDriver():
         if extra_params is not None:
             extra_params['mbpkgid'] = mbpkgid
             return self.connection(
-                '/cloud/server/delete', data=extra_params, method='POST'
+                '/cloud/server/delete/{0}'.format(mbpkgid), data=extra_params, method='POST'
             )
         return self.connection(
             '/cloud/server/delete/{0}'.format(mbpkgid), method='POST'
