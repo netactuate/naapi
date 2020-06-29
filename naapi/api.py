@@ -82,6 +82,12 @@ class NetActuateNodeDriver():
         locs_resp = self.connection('/cloud/locations/')
         locations = []
         locs_dict = locs_resp.json()
+
+        # If we received an error pass it up now for handling
+        if 'error' in locs_dict:
+            if 'msg' in locs_dict:
+                return locs_dict
+
         for loc_key in locs_dict:
             # just add the country from part of the name afer comma
             locs_dict[loc_key]['country'] = (
