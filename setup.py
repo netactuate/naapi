@@ -3,14 +3,14 @@ from setuptools import setup
 
 setup(
     name='naapi',
-    version='0.1.4',
+    version='0.1.5',
     packages=['naapi'],
     url='https://github.com/netactuate/naapi/',
     license='MIT',
     description='NetActuate API SDK, With both normal and asyncio packages',
     keywords='api sdk cloud python netactuate',
-    author='Dennis Durling',
-    author_email='djdtahoe@gmail.com',
+    author='NetActuate',
+    author_email='support@netactuate.com',
     long_description='Provides a basic interface to execute public api endpoints',
     zip_safe=False,
     include_package_data=True,

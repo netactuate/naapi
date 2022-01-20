@@ -30,9 +30,9 @@ def connection(key, api_version):
     """TODO"""
     __key__ = key
     if api_version in API_HOSTS.keys():
-        root_url = 'http://{0}'.format(API_HOSTS[api_version])
+        root_url = 'https://{0}'.format(API_HOSTS[api_version])
     else:
-        root_url = 'http://{0}'.format(API_HOSTS['v1'])
+        root_url = 'https://{0}'.format(API_HOSTS['v1'])
 
     def request(url, data=None, method=None):
         if method is None:
