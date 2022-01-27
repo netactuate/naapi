@@ -247,3 +247,30 @@ class NetActuateNodeDriver():
         """
         params = {'mbpkgid': mbpkgid}
         return self.connection('/cloud/serverjobs/', data=params)
+
+    def bgp_sessions(self, session_id=False):
+        """
+            Retrieve BGP session information
+        """
+        if session_id:
+            return self.connection('/cloud/bgpsession2/' + str(session_id))
+        return self.connection('/cloud/bgpsessions2')
+
+    def bgp_summary(self):
+        """
+            Retrieve BGP session summary
+        """
+        return self.connection('/cloud/bgpsummary')
+
+    def bgp_create_sessions(self, mbpkgid, group_id, ipv6=True, redundant=False):
+        """
+            Build BGP sessions for a node in a given BGP group
+        """
+        params = { "group_id": group_id }
+        if ipv6:
+            params['ipv6'] = 1
+        if redundant:
+            params['redundant'] = 1
+        return self.connection(
+            '/cloud/bgpcreatesessions/{0}'.format(mbpkgid), data=params, method='POST'
+        )
