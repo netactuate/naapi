@@ -7,10 +7,18 @@ import requests as rq
 
 API_HOSTS = {
     'v1': 'vapi.netactuate.com',
+    'v2': 'vapi2.netactuate.com',
+}
+
+API_ROOT = {
+    'v1': '',
+    'v2': '/api'
 }
 
 class NetActuateException(Exception):
-    """TODO"""
+    """
+        Basic exception class for API errors
+    """
     def __init__(self, code, message):
         self.code = code
         self.message = message
@@ -26,13 +34,24 @@ class NetActuateException(Exception):
             .format(self.code, self.message)
         )
 
-def connection(key, api_version):
-    """TODO"""
+def connection(key, api_version=None, api_host=None):
+    """
+        Conncetion wrapper
+    """
     __key__ = key
-    if api_version in API_HOSTS.keys():
-        root_url = 'https://{0}'.format(API_HOSTS[api_version])
+
+    if not api_host:
+        if api_version in API_HOSTS.keys():
+            api_host = API_HOSTS[api_version]
+        else: 
+            api_host = API_HOSTS['v2']
+
+    root_url = 'https://{0}'.format(api_host)
+
+    if api_version in API_ROOT.keys():
+        root_url = root_url + API_ROOT[api_version]
     else:
-        root_url = 'https://{0}'.format(API_HOSTS['v1'])
+        root_url = root_url + API_ROOT['v2']
 
     def request(url, data=None, method=None):
         if method is None:
@@ -56,98 +75,141 @@ def connection(key, api_version):
             raise NetActuateException(
                 response.status_code, response.content)
 
-        return response
+        if api_version == 'v1':
+            return response
+        else:
+            # extract data or error
+            resp_body = response.json()
+            if resp_body['result'] == 'success':
+                if 'data' in resp_body:
+                    # extract the data response
+                    # pylint: disable=protected-access
+                    response._content = json.dumps(resp_body['data']).encode()
+                return response
+            else:
+                error_message = resp_body['message']
+                error_data = resp_body
+                del(error_data['result'])
+                del(error_data['message'])
+                raise NetActuateException(
+                    error_message, json.dumps(error_data))
 
     return request
 
 # pylint: disable=too-many-public-methods
 class NetActuateNodeDriver():
-    """Todo"""
+    """
+        API wrapper for common calls
+    """
     name = 'NetActuate'
     website = 'http://www.netactuate.com'
 
-    def __init__(self, key, api_version=None):
+    def __init__(self, key, api_version=None, api_host=None):
         if api_version is None:
-            self.api_version = 'v1'
+            self.api_version = 'v2'
         else:
             self.api_version = api_version
         self.key = key
-        self.connection = connection(self.key, api_version=api_version)
+        self.connection = connection(self.key, api_version=self.api_version, api_host=api_host)
 
     def locations(self):
         """Rewriting the dictionary into a list
         Also adding a key to each location named 'country'
-        based off the name value
+        based off the flags value
         """
         locs_resp = self.connection('/cloud/locations/')
-        locations = []
-        locs_dict = locs_resp.json()
 
-        # If we received an error pass it up now for handling
-        if 'error' in locs_dict:
-            if 'msg' in locs_dict:
-                return locs_dict
+        if self.api_version == 'v1':
+            locations = []
+            locs_dict = locs_resp.json()
 
-        for loc_key in locs_dict:
-            # just add the country from part of the name afer comma
-            locs_dict[loc_key]['country'] = (
-                locs_dict[loc_key]['name']
-                .split(',')[1].replace(" ", "")
-            )
-            # put in list
-            locations.append(locs_dict[loc_key])
+            # If we received an error pass it up now for handling
+            if 'error' in locs_dict:
+                if 'msg' in locs_dict:
+                    return locs_dict
 
-        # update the response object so we can return it as a list
-        # like other response objects. TODO: Update api to return a list
-        # pylint: disable=protected-access
-        locs_resp._content = json.dumps(locations).encode()
+            for loc_key in locs_dict:
+                locs_dict[loc_key]['country'] = locs_dict[loc_key]['flag'].upper()
+                # put in list
+                locations.append(locs_dict[loc_key])
+
+            # update the response object so we can return it as a list
+            # like other response objects. TODO: Update api to return a list
+            # pylint: disable=protected-access
+            locs_resp._content = json.dumps(locations).encode()
         return locs_resp
 
     def os_list(self):
-        """Todo"""
+        """
+            Retrieve the list of available VM install images
+        """
         return self.connection('/cloud/images/')
 
     def plans(self, location=False):
-        """Todo"""
-        if location:
-            return self.connection('/cloud/sizes/' + str(location))
-        return self.connection('/cloud/sizes/')
+        """
+            Retrieve the list of available VM plans in a location
+        """
+        if self.api_version == 'v1':
+            if location:
+                return self.connection('/cloud/sizes/' + str(location))
+            return self.connection('/cloud/sizes/')
+        else:
+            plans_resp = self.connection('/cloud/sizes/' + str(location))
+            # return values for improved compatibility
+            plans_resp._content = json.dumps(list(plans_resp.json().values())).encode()
+            return plans_resp
 
     def servers(self, mbpkgid=False):
-        """Todo"""
+        """
+            Retrieve server details for one or all VM instances
+        """
         if mbpkgid:
             return self.connection('/cloud/server/' + str(mbpkgid))
         return self.connection('/cloud/servers/')
 
     def packages(self, mbpkgid=False):
-        """Todo"""
+        """
+            Retrieve package-specific details for one or all packages
+        """
         if mbpkgid:
             return self.connection('/cloud/package/' + str(mbpkgid))
         return self.connection('/cloud/packages')
 
     def ipv4(self, mbpkgid):
-        """Todo"""
+        """
+            Retrieve IPv4 assignment for a VM instance
+        """
         return self.connection('/cloud/ipv4/' + str(mbpkgid))
 
     def ipv6(self, mbpkgid):
-        """Todo"""
+        """
+            Retrieve IPv6 assignment for a VM instance
+        """
         return self.connection('/cloud/ipv6/' + str(mbpkgid))
 
     def networkips(self, mbpkgid):
-        """Todo"""
+        """
+            Retrieve IP assignments for a VM instance
+        """
         return self.connection('/cloud/networkips/' + str(mbpkgid))
 
     def summary(self, mbpkgid):
-        """Todo"""
+        """
+            Retrieve summary overview of a VM instance 
+        """
         return self.connection('/cloud/serversummary/' + str(mbpkgid))
 
     def start(self, mbpkgid):
-        """Todo"""
+        """
+            Start an offline VM instance
+        """
         return self.connection(
             '/cloud/server/start/{0}'.format(mbpkgid), method='POST')
 
     def shutdown(self, mbpkgid, force=False):
-        """Todo"""
+        """
+            Issue a shutdown signal to a VM instance or forcefully kill the instance
+        """
         params = {}
         if force:
             params['force'] = 1
@@ -155,7 +217,9 @@ class NetActuateNodeDriver():
             '/cloud/server/shutdown/{0}'.format(mbpkgid), data=params, method='POST')
 
     def reboot(self, mbpkgid, force=False):
-        """Todo"""
+        """
+            Reboot a VM instance
+        """
         params = {}
         if force:
             params['force'] = 1
@@ -164,26 +228,35 @@ class NetActuateNodeDriver():
             method='POST')
 
     def rescue(self, mbpkgid, password):
-        """Todo"""
+        """
+            Enable rescue mode on a VM instance
+        """
         params = {'rescue_pass': str(password)}
         return self.connection(
             '/cloud/server/start_rescue/{0}'.format(mbpkgid), data=params,
             method='POST')
 
     def rescue_stop(self, mbpkgid):
-        """Todo"""
+        """
+            Disable rescue mode on a VM instance
+        """
         return self.connection(
             '/cloud/server/stop_rescue/{0}'.format(mbpkgid), method='POST')
 
     # pylint: disable=too-many-arguments
-    def build(self, site, image, fqdn, passwd, mbpkgid):
-        """Todo"""
-        params = {'fqdn': fqdn, 'mbpkgid': mbpkgid,
-                  'image': image, 'location': site,
-                  'password': passwd}
+    def build(self, site=None, image=None, fqdn=None, passwd=None, mbpkgid=None, params=None):
+        """
+            Build a new VM to an existing instance
+        """
+        if not params:
+            params = {'fqdn': fqdn, 'mbpkgid': mbpkgid,
+                      'image': image, 'location': site,
+                      'password': passwd}
 
-        return self.connection(
-            '/cloud/server/build/', data=params, method='POST')
+        if self.api_version == 'v1':
+            return self.connection('/cloud/server/build/', data=params, method='POST')
+        else:
+            return self.connection('/cloud/server/build/{0}'.format(params['mbpkgid']), data=params, method='POST')
 
     def delete(self, mbpkgid, extra_params=None):
         """Delete the vm
@@ -202,65 +275,141 @@ class NetActuateNodeDriver():
         )
 
     def unlink(self, mbpkgid):
-        """Todo"""
+        """
+            Release the assigned location and IP allocation for a VM instance
+        """
         return self.connection(
-            '/cloud/unlink/{0}'.format(mbpkgid), method='POST')
+            '/cloud/server/unlink/{0}'.format(mbpkgid), method='POST')
 
     def status(self, mbpkgid):
-        """Todo"""
+        """
+            Check the status of a VM instance
+        """
         return self.connection('/cloud/status/{0}'.format(mbpkgid))
 
     def bandwidth_report(self, mbpkgid):
-        """Todo"""
+        """
+            Retrieve monthly bandwidth report
+        """
         return self.connection('/cloud/servermonthlybw/' + str(mbpkgid))
 
     def cancel(self, mbpkgid):
-        """Todo"""
-        return self.connection(
-            '/cloud/cancel/{0}'.format(mbpkgid), method='POST'
-        )
+        """
+            Cancel a service immediately
+        """
+        if self.api_version == 'v1':
+            return self.connection(
+                '/cloud/cancel/{0}'.format(mbpkgid), method='POST'
+            )
+        else:
+            params = {
+                'mbpkgid': mbpkgid,
+                'cancel_type': 'Immediate',
+                'agree': 1
+            }
+            return self.connection('/cloud/package/cancel', data=params, method='POST')
 
     def buy(self, plan):
-        """Todo"""
-        return self.connection('/cloud/buy/' + plan)
+        """
+            ! Deprecated !
+            Acquire a new VM instance
+        """
+        if self.api_version == 'v1':
+            return self.connection('/cloud/buy/' + plan)
+        else:
+            raise NotImplementedError("Deprecated")
 
     def buy_build(self, params):
-        """Todo"""
-        return self.connection(
-            '/cloud/buy_build/', data=params, method='POST'
-        )
+        """
+            Acquire and build to a new VM instance
+        """
+        if self.api_version == 'v1':
+            endpoint = '/cloud/buy_build/'
+        else:
+            if 'mbpkgid' in params and params['mbpkgid']:
+                # rebuilds should call the build endpoint instead
+                params['mbpkgid'] = int(params['mbpkgid'])
+                return self.build(params=params)
+            endpoint = '/cloud/server/buy_build'
+
+        return self.connection(endpoint, data=params, method='POST')
 
     def get_job(self, mbpkgid, job_id):
-        """Gets all server jobs for this mbpkgid with the provided jobid
-
-        TODO:   update get_job and get_jobs to be more explicit
-                This will require an api change
         """
-        params = {'job_id': job_id, 'mbpkgid': mbpkgid}
-        return self.connection('/cloud/serverjob/', data=params)
+            Gets all server jobs for this mbpkgid with the provided jobid
+        """
+        if self.api_version == 'v1':
+            params = {'job_id': job_id, 'mbpkgid': mbpkgid}
+            return self.connection('/cloud/serverjob/', data=params)
+        else:
+            return self.connection('/cloud/server/{0}/jobs/{1}'.format(mbpkgid, job_id))
 
     def get_jobs(self, mbpkgid):
-        """Gets all server jobs for this mbpkgid
-
-        TODO:   update get_job and get_jobs to be more explicit
-                This will require an api change
         """
-        params = {'mbpkgid': mbpkgid}
-        return self.connection('/cloud/serverjobs/', data=params)
+            Gets all server jobs for this mbpkgid
+        """
+        if self.api_version == 'v1':
+            params = {'mbpkgid': mbpkgid}
+            return self.connection('/cloud/serverjobs/', data=params)
+        else:
+            return self.connection('/cloud/server/{0}/jobs'.format(mbpkgid))
 
     def bgp_sessions(self, session_id=False):
         """
             Retrieve BGP session information
         """
-        if session_id:
-            return self.connection('/cloud/bgpsession2/' + str(session_id))
-        return self.connection('/cloud/bgpsessions2')
+        if self.api_version == 'v1':
+            if session_id:
+                endpoint = '/cloud/bgpsession2/{0}'.format(session_id)
+            else:
+                endpoint = '/cloud/bgpsessions2'
+        else:
+            if session_id:
+                endpoint = '/bgp/bgpsession/{0}'.format(session_id)
+            else:
+                endpoint = '/bgp/bgpsessions'
+
+        return self.connection(endpoint)
+
 
     def bgp_summary(self):
         """
             Retrieve BGP session summary
         """
-        return self.connection('/cloud/bgpsummary')
+        if self.api_version == 'v1':
+            endpoint = '/cloud/bgpsummary'
+        else:
+            endpoint = '/bgp/bgpsummary'
+
+        return self.connection(endpoint)
+
+    def bgp_groups(self, group_id=False):
+        """
+            Retrieve BGP group information
+        """
+        if self.api_version == 'v1':
+            if group_id:
+                endpoint = '/cloud/bgpgroup/{0}'.format(group_id)
+            else:
+                endpoint = '/cloud/bgpgroups'
+        else:
+            if group_id:
+                endpoint = '/bgp/bgpgroup/{0}'.format(group_id)
+            else:
+                endpoint = '/bgp/bgpgroups'
+
+        return self.connection(endpoint)
+
+    def bgp_asns(self):
+        """
+            Retrieve BGP group information
+        """
+        if self.api_version == 'v1':
+            endpoint = '/cloud/bgpasns'
+        else:
+            endpoint = '/bgp/bgpasns'
+
+        return self.connection(endpoint)
 
     def bgp_create_sessions(self, mbpkgid, group_id, ipv6=True, redundant=False):
         """
@@ -271,6 +420,42 @@ class NetActuateNodeDriver():
             params['ipv6'] = 1
         if redundant:
             params['redundant'] = 1
-        return self.connection(
-            '/cloud/bgpcreatesessions/{0}'.format(mbpkgid), data=params, method='POST'
-        )
+
+        if self.api_version == 'v1':
+            endpoint = '/cloud/bgpcreatesessions/{0}'.format(mbpkgid)
+            return self.connection(endpoint, data=params, method='POST')
+        else:
+            params['mbpkgid'] = mbpkgid 
+            endpoint = '/bgp/bgpcreatesessions'
+            # backwards compatibility
+            bgp_resp = self.connection(endpoint, data=params, method='POST')
+            bgp_json = bgp_resp.json()
+            if 'Sessions' in bgp_json:
+                bgp_json['sessions'] = list(bgp_json.pop('Sessions').values())
+            if 'Modified' in bgp_json:
+                bgp_json['modified'] = bgp_json.pop('Modified')
+            bgp_json['success'] = True
+            bgp_resp._content = json.dumps(bgp_json).encode()
+            return bgp_resp
+
+    def bgp_buy_prefixes(self, name, agreement_id, group_id=None, asn_id=None, anycast_profile=1):
+        """
+            Build BGP sessions for a node in a given BGP group
+        """
+        params = {
+            "name": name,
+            "agreement_id": agreement_id,
+        }
+
+        if group_id:
+            params['group_id'] = group_id
+        else:
+            params['asn_id'] = asn_id
+            params['anycast_profile'] = anycast_profile
+
+        if self.api_version == 'v1':
+            raise NotImplementedError("Call not available in this version")
+        else:
+            endpoint = '/bgp/bgpbuyprefixes'
+
+        return self.connection(endpoint, data=params, method='POST')
